@@ -1,0 +1,9 @@
+# level1.txt
+# This file contains the layout data for level 1 of the stealth maze game.
+###################
+#P....#...........#
+#.###.#.#####.###.#
+#.....#.....#...#.#
+#.#####.###.#.#.#.#
+#.....E...#...#..I#
+###################

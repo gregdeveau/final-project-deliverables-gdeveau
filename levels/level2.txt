@@ -1,0 +1,9 @@
+# level2.txt
+# This file contains the layout data for level 2 of the stealth maze game.
+###################
+#P......#.....#...#
+#.#######.###.#.#.#
+#.....#...#...#.#.#
+#.###.#.###.###.#.#
+#...#...E.....#..I#
+###################
