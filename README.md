@@ -7,7 +7,7 @@ The player moves through a maze, avoids enemies, collects the intel piece, and w
 
 - `models.py` - main game classes
 - `loader.py` - level loading helpers
-- `util.py` - shared utility classes and enums
+- `util.py` - shared utility values and score helpers
 - `highscore.txt` - stored high score
 - `levels/level1.txt` - level 1 layout
 - `levels/level2.txt` - level 2 layout
@@ -27,3 +27,11 @@ The player moves through a maze, avoids enemies, collects the intel piece, and w
 - `P` = player start
 - `E` = enemy start
 - `I` = intel piece
+
+## How To Run
+
+Run the game from the project folder with:
+
+```bash
+python models.py
+```
