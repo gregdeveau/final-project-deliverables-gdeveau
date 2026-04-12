@@ -8,7 +8,8 @@ The player moves through a maze, avoids enemies, collects the intel piece, and w
 - `models.py` - main game classes
 - `main.py` - starts the game
 - `loader.py` - level loading helpers
-- `util.py` - shared utility values and score helpers
+- `scoreboard.py` - high score tracking
+- `util.py` - shared utility values
 - `highscore.txt` - stored high score
 - `levels/level1.txt` - level 1 layout
 - `levels/level2.txt` - level 2 layout

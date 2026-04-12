@@ -5,6 +5,7 @@ import random
 import tkinter as tk
 
 from loader import load_all_levels
+from scoreboard import ScoreBoard
 from util import (
     CELL_SIZE,
     ENEMY_COLOR,
@@ -17,7 +18,6 @@ from util import (
     STEP_MS,
     TEXT_COLOR,
     WALL_COLOR,
-    ScoreBoard,
 )
 
 
