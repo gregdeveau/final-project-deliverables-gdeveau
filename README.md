@@ -6,6 +6,7 @@ The player moves through a maze, avoids enemies, collects the intel piece, and w
 ## Project Structure
 
 - `models.py` - main game classes
+- `main.py` - starts the game
 - `loader.py` - level loading helpers
 - `util.py` - shared utility values and score helpers
 - `highscore.txt` - stored high score
@@ -33,5 +34,5 @@ The player moves through a maze, avoids enemies, collects the intel piece, and w
 Run the game from the project folder with:
 
 ```bash
-python models.py
+python main.py
 ```
