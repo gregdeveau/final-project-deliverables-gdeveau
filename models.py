@@ -14,6 +14,8 @@ from util import (
     HUD_HEIGHT,
     INTEL_COLOR,
     PLAYER_COLOR,
+    ROUND_COMPLETE_MS,
+    ROUND_START_SECONDS,
     SCORES_FILE,
     STEP_MS,
     TEXT_COLOR,
@@ -133,10 +135,17 @@ class Game:
         self.enemies = []
         self.game_over = False
         self.win = False
-        self.message = "Find the intel and avoid the guards. Arrow keys or WASD to move."
+        self.default_message = "Find the intel and avoid the guards. Arrow keys or WASD to move."
+        self.message = self.default_message
         self.pending_move = None
         self.enemy_loop_id = None
         self.player_loop_id = None
+        self.countdown_loop_id = None
+        self.round_complete_loop_id = None
+        self.round_countdown = 0
+        self.round_ready_message = self.default_message
+        self.show_round_complete = False
+        self.pending_level_index = None
 
         self.load_level(reset_progress=True)
 
@@ -149,8 +158,7 @@ class Game:
         self.restart_button = tk.Button(root, text="Restart Game", command=self.restart_game)
         self.restart_button.pack(pady=6)
 
-        self.start_loops()
-        self.draw()
+        self.begin_round(self.default_message)
 
     def load_level(self, reset_progress: bool):
         score = 0
@@ -183,34 +191,87 @@ class Game:
         if self.enemy_loop_id is not None:
             self.root.after_cancel(self.enemy_loop_id)
             self.enemy_loop_id = None
+        if self.countdown_loop_id is not None:
+            self.root.after_cancel(self.countdown_loop_id)
+            self.countdown_loop_id = None
+        if self.round_complete_loop_id is not None:
+            self.root.after_cancel(self.round_complete_loop_id)
+            self.round_complete_loop_id = None
+
+    def begin_round(self, ready_message: str):
+        self.stop_loops()
+        self.pending_move = None
+        self.show_round_complete = False
+        self.round_ready_message = ready_message
+        self.round_countdown = ROUND_START_SECONDS
+        self.message = f"Round starts in {self.round_countdown}"
+        self.draw()
+        self.countdown_loop_id = self.root.after(1000, self.countdown_tick)
+
+    def countdown_tick(self):
+        self.countdown_loop_id = None
+        if self.game_over:
+            return
+
+        self.round_countdown -= 1
+        if self.round_countdown > 0:
+            self.message = f"Round starts in {self.round_countdown}"
+            self.draw()
+            self.countdown_loop_id = self.root.after(1000, self.countdown_tick)
+            return
+
+        self.round_countdown = 0
+        self.message = self.round_ready_message
+        self.start_loops()
+        self.draw()
 
     def restart_game(self):
         self.level_index = 0
         self.game_over = False
         self.win = False
         self.pending_move = None
-        self.message = "New stealth run started."
         self.load_level(reset_progress=True)
-        self.start_loops()
-        self.draw()
+        self.begin_round(self.default_message)
 
     def next_level(self):
-        self.level_index += 1
-        if self.level_index >= len(self.level_maps):
+        next_level_index = self.level_index + 1
+        if next_level_index >= len(self.level_maps):
             self.win = True
             self.game_over = True
             self.message = "Mission complete. You escaped with the intel."
             self.finish_game()
             return
 
+        self.show_round_complete_screen(next_level_index)
+
+    def show_round_complete_screen(self, next_level_index: int):
+        self.stop_loops()
+        self.pending_move = None
+        self.round_countdown = 0
+        self.show_round_complete = True
+        self.pending_level_index = next_level_index
+        self.message = "Round complete."
+        self.draw()
+        self.round_complete_loop_id = self.root.after(ROUND_COMPLETE_MS, self.load_next_round)
+
+    def load_next_round(self):
+        self.round_complete_loop_id = None
+        if self.pending_level_index is None:
+            return
+
+        self.show_round_complete = False
+        self.level_index = self.pending_level_index
+        self.pending_level_index = None
         self.load_level(reset_progress=False)
-        self.message = f"Warp complete. Level {self.level_index + 1}."
+        self.begin_round(f"Level {self.level_index + 1}. Find the intel.")
 
     def finish_game(self):
         self.stop_loops()
         self.scoreboard.save_result(self.player.score)
 
     def handle_keypress(self, event):
+        if self.round_countdown > 0 or self.show_round_complete:
+            return
         if event.keysym in self.DIRECTIONS:
             self.pending_move = self.DIRECTIONS[event.keysym]
 
@@ -278,8 +339,8 @@ class Game:
                     self.message = "Mission failed. Press Restart Game to try again."
                     self.finish_game()
                 else:
-                    self.message = f"Guard spotted you. Lives remaining: {self.player.lives}"
                     self.reset_positions()
+                    self.begin_round("Back to the start. Avoid the guards.")
                 break
 
     def reset_positions(self):
@@ -308,6 +369,10 @@ class Game:
         self.draw_entities()
         if self.game_over:
             self.draw_overlay()
+        elif self.show_round_complete:
+            self.draw_round_complete_overlay()
+        elif self.round_countdown > 0:
+            self.draw_countdown_overlay()
 
     def draw_hud(self):
         width = self.level.width * CELL_SIZE
@@ -368,6 +433,46 @@ class Game:
         x2 = (entity.col + 1) * CELL_SIZE - pad_x
         y2 = HUD_HEIGHT + (entity.row + 1) * CELL_SIZE - pad_y
         self.canvas.create_oval(x1, y1, x2, y2, fill=color, outline="")
+
+    def draw_countdown_overlay(self):
+        width = self.level.width * CELL_SIZE
+        board_height = self.level.height * CELL_SIZE
+        center_y = HUD_HEIGHT + (board_height / 2)
+        self.canvas.create_rectangle(0, HUD_HEIGHT, width, HUD_HEIGHT + board_height, fill="black", stipple="gray50")
+        self.canvas.create_text(
+            width / 2,
+            center_y - 25,
+            text="ROUND STARTS IN",
+            fill="white",
+            font=("Consolas", 18, "bold"),
+        )
+        self.canvas.create_text(
+            width / 2,
+            center_y + 20,
+            text=str(self.round_countdown),
+            fill="white",
+            font=("Consolas", 34, "bold"),
+        )
+
+    def draw_round_complete_overlay(self):
+        width = self.level.width * CELL_SIZE
+        board_height = self.level.height * CELL_SIZE
+        center_y = HUD_HEIGHT + (board_height / 2)
+        self.canvas.create_rectangle(0, HUD_HEIGHT, width, HUD_HEIGHT + board_height, fill="black", stipple="gray50")
+        self.canvas.create_text(
+            width / 2,
+            center_y - 10,
+            text="ROUND COMPLETE",
+            fill="white",
+            font=("Consolas", 24, "bold"),
+        )
+        self.canvas.create_text(
+            width / 2,
+            center_y + 28,
+            text="Loading next round...",
+            fill="white",
+            font=("Consolas", 12),
+        )
 
     def draw_overlay(self):
         width = self.level.width * CELL_SIZE
