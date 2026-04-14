@@ -7,6 +7,7 @@ import tkinter as tk
 from loader import load_all_levels
 from scoreboard import ScoreBoard
 from util import (
+    CAUGHT_DELAY_MS,
     CELL_SIZE,
     ENEMY_COLOR,
     ENEMY_STEP_MS,
@@ -142,10 +143,13 @@ class Game:
         self.player_loop_id = None
         self.countdown_loop_id = None
         self.round_complete_loop_id = None
+        self.caught_loop_id = None
         self.round_countdown = 0
         self.round_ready_message = self.default_message
         self.show_round_complete = False
+        self.show_caught = False
         self.pending_level_index = None
+        self.caught_ready_message = self.default_message
 
         self.load_level(reset_progress=True)
 
@@ -197,11 +201,15 @@ class Game:
         if self.round_complete_loop_id is not None:
             self.root.after_cancel(self.round_complete_loop_id)
             self.round_complete_loop_id = None
+        if self.caught_loop_id is not None:
+            self.root.after_cancel(self.caught_loop_id)
+            self.caught_loop_id = None
 
     def begin_round(self, ready_message: str):
         self.stop_loops()
         self.pending_move = None
         self.show_round_complete = False
+        self.show_caught = False
         self.round_ready_message = ready_message
         self.round_countdown = ROUND_START_SECONDS
         self.message = f"Round starts in {self.round_countdown}"
@@ -265,29 +273,52 @@ class Game:
         self.load_level(reset_progress=False)
         self.begin_round(f"Level {self.level_index + 1}. Find the intel.")
 
+    def show_caught_screen(self, ready_message: str):
+        self.stop_loops()
+        self.pending_move = None
+        self.round_countdown = 0
+        self.show_caught = True
+        self.caught_ready_message = ready_message
+        self.message = f"Caught! Lives remaining: {self.player.lives}"
+        self.draw()
+        self.caught_loop_id = self.root.after(CAUGHT_DELAY_MS, self.start_round_after_caught)
+
+    def start_round_after_caught(self):
+        self.caught_loop_id = None
+        if self.game_over:
+            return
+        self.reset_positions()
+        self.begin_round(self.caught_ready_message)
+
     def finish_game(self):
         self.stop_loops()
         self.scoreboard.save_result(self.player.score)
 
     def handle_keypress(self, event):
-        if self.round_countdown > 0 or self.show_round_complete:
+        if self.round_is_paused():
             return
         if event.keysym in self.DIRECTIONS:
             self.pending_move = self.DIRECTIONS[event.keysym]
 
     def game_tick(self):
+        if self.game_over or self.round_is_paused():
+            self.draw()
+            return
         if not self.game_over and self.pending_move:
             self.move_player(*self.pending_move)
         self.draw()
-        if not self.game_over:
+        if not self.game_over and not self.round_is_paused():
             self.player_loop_id = self.root.after(STEP_MS, self.game_tick)
 
     def enemy_tick(self):
-        if not self.game_over:
-            for enemy in self.enemies:
-                self.move_enemy(enemy)
-            self.check_collisions()
+        if self.game_over or self.round_is_paused():
             self.draw()
+            return
+        for enemy in self.enemies:
+            self.move_enemy(enemy)
+        self.check_collisions()
+        self.draw()
+        if not self.game_over and not self.round_is_paused():
             self.enemy_loop_id = self.root.after(ENEMY_STEP_MS, self.enemy_tick)
 
     def move_player(self, dr: int, dc: int):
@@ -339,8 +370,7 @@ class Game:
                     self.message = "Mission failed. Press Restart Game to try again."
                     self.finish_game()
                 else:
-                    self.reset_positions()
-                    self.begin_round("Back to the start. Avoid the guards.")
+                    self.show_caught_screen("Back to the start. Avoid the guards.")
                 break
 
     def reset_positions(self):
@@ -348,6 +378,9 @@ class Game:
         self.player.has_intel = False
         for enemy in self.enemies:
             enemy.reset()
+
+    def round_is_paused(self):
+        return self.round_countdown > 0 or self.show_round_complete or self.show_caught
 
     def check_intel_pickup(self) -> bool:
         if self.level.collect_intel_at(self.player.row, self.player.col):
@@ -369,6 +402,8 @@ class Game:
         self.draw_entities()
         if self.game_over:
             self.draw_overlay()
+        elif self.show_caught:
+            self.draw_caught_overlay()
         elif self.show_round_complete:
             self.draw_round_complete_overlay()
         elif self.round_countdown > 0:
@@ -470,6 +505,26 @@ class Game:
             width / 2,
             center_y + 28,
             text="Loading next round...",
+            fill="white",
+            font=("Consolas", 12),
+        )
+
+    def draw_caught_overlay(self):
+        width = self.level.width * CELL_SIZE
+        board_height = self.level.height * CELL_SIZE
+        center_y = HUD_HEIGHT + (board_height / 2)
+        self.canvas.create_rectangle(0, HUD_HEIGHT, width, HUD_HEIGHT + board_height, fill="black", stipple="gray50")
+        self.canvas.create_text(
+            width / 2,
+            center_y - 10,
+            text="CAUGHT!",
+            fill="white",
+            font=("Consolas", 24, "bold"),
+        )
+        self.canvas.create_text(
+            width / 2,
+            center_y + 28,
+            text=f"Lives remaining: {self.player.lives}",
             fill="white",
             font=("Consolas", 12),
         )
